@@ -137,6 +137,23 @@ Respond as follows:
 Files under `.claude/worktrees/**` are always allowed by the guard — the
 hook's fast path lets mid-slice edits through without overhead.
 
+**Exception — the three build skills share one workspace.** When the
+user runs `/dev-build-architecture`, `/dev-build-scaffold`, or
+`/dev-build-application`, do **not** derive a new name from the
+request. All three skills use a fixed shared workspace name:
+
+```bash
+bash .claude/hooks/begin-change.sh --type build initial-build
+```
+
+This is deliberate. `begin-change.sh` is idempotent on name, so the
+second and third skills continue in the same workspace `/dev-build-architecture`
+created — they can read its outputs directly, and the whole build
+accumulates in one place. Nothing ships until the analyst runs
+`/dev-review-and-remediate` + `/dev-ship` once, at the very end of
+`/dev-build-application`. Each skill's `SKILL.md` documents this
+explicitly.
+
 ---
 
 ## SESSION START — resume pending work in plain English

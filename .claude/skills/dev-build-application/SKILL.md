@@ -6,9 +6,9 @@ version: '0.1'
 
 # /dev-build-application — Step 3: Vertical Slice Implementation
 
-Implement the locked slice plan **one slice per iteration, in order**. After each slice is implemented (code + tests as the layer-cut plan dictates), hand off to `/dev-review-and-remediate` — the slice-completion gate that runs the tests, runs code review and security review, and remediates findings — and then `/dev-ship`, before pausing for human confirmation to continue. STOP on any non-yes answer; **hard-STOP** at the rare review gates (architecture every 5 slices, product review at spec-section completion).
+Implement the locked slice plan **one slice per iteration, in order**, pausing for human confirmation between each slice. Tests are authored as part of each slice's deliverable. STOP on any non-yes answer; **hard-STOP** at the rare review gates (architecture every 5 slices, product review at spec-section completion). After the last slice, this skill hands off to `/dev-review-and-remediate` + `/dev-ship` — those run **once** at the end and gate-then-land the entire build (architecture + scaffold + all slices) as one merge commit on `dev`.
 
-This skill does **not run** tests, lint, code review, or security review — those run at slice-completion via `/dev-review-and-remediate`. Tests are still **authored** here as part of the slice deliverable.
+This skill does **not run** tests, lint, code review, or security review — those run at the end of the build via `/dev-review-and-remediate`. Tests are still **authored** here as part of each slice's deliverable.
 
 A slice = **one user-visible capability** (something a user can describe in one sentence) — not a layer, not a single endpoint, not a single audit event.
 
@@ -16,6 +16,35 @@ A slice = **one user-visible capability** (something a user can describe in one 
 
 - **Empty (common case)** → auto-pick the first slice in `slice-plan.md` without `Status: completed`.
 - **Slice name** → start from that slice (must match an entry in `slice-plan.md`). Warn if there are earlier unstarted slices.
+
+## Workspace — shared across the three build skills
+
+This skill continues in the **same** workspace that
+`/dev-build-architecture` and `/dev-build-scaffold` already populated,
+branched off `dev` at the start of the build flow. This is a deliberate
+exception to the CLAUDE.md "derive a kebab-case name from the user's
+request" rule for the integration-branch guard.
+
+Before any Edit/Write/NotebookEdit in this skill, ask for the shared
+workspace by its fixed name (idempotent — returns the same one the
+earlier skills used):
+
+```bash
+WT=$(bash .claude/hooks/begin-change.sh --type build initial-build)
+```
+
+The architecture and scaffold work lives inside `$WT`. Read from there,
+write each slice on top, also inside `$WT`. **Do not invoke `/dev-ship`
+between slices** — the build accumulates in this single workspace and
+ships once at the very end (Step 9 below). `/dev-undo` after the final
+ship rolls back the entire build, not individual slices — this is the
+design trade-off for a continuous analyst flow.
+
+If `$WT` doesn't already contain the architecture artifacts + scaffold
+output, **STOP** and tell the analyst to run `/dev-build-architecture`
+and `/dev-build-scaffold` first.
+
+Issue every Edit/Write in this skill against paths inside `$WT`.
 
 ## Flags
 
@@ -149,22 +178,40 @@ Slice plan declared a 25% drift cap. Tempted to atomize "to make review easier" 
 
 Never silently expand or split.
 
-### 9. Hand off to `/dev-ship`
+### 9. Pause between slices, then hand off at the end
 
-When the slice is implemented, **stop here**. Tell the developer in
-plain English:
+**Between slices.** When the current slice is implemented (code + tests
+all inside `$WT`), pause for analyst confirmation. Do **not** invoke
+`/dev-ship` — the build accumulates in `$WT` and ships once at the end.
+
+Plain English message:
 
 ```
-Slice <name> is implemented (code + tests). Run /ship to send it to the integration
-branch — it handles the test gate, code/security review, commit, merge, and push in
-one go.
+Slice <name> is implemented (code + tests). Continue to the next slice? (yes/no)
 ```
 
-`/dev-ship` will invoke `/dev-review-and-remediate` itself if the
-test/review cache is missing or stale, then commit on the slice or fix
-branch, then merge the slice into `dev` and push. Do not run reviews,
-tests, lint, or any quality gates inside this skill — they're owned by
-the ship pipeline so the slice loop stays focused on implementation.
+On `yes` → pick the next un-completed slice from `slice-plan.md` and
+loop back to Step 1 of this skill. On any non-yes → STOP and surface
+the question to the analyst.
+
+**After the final slice.** When the last slice in `slice-plan.md`
+has been implemented, tell the analyst:
+
+```
+All slices implemented. The build is ready to ship.
+
+Next:
+1. /dev-review-and-remediate   — gates the whole build through tests + code review + security review
+2. /dev-ship                    — commits, merges into dev, pushes
+
+If /dev-review-and-remediate finishes CLEAN, /dev-ship will skip its own
+re-run via the cache. If anything goes wrong on dev after shipping,
+/dev-undo rolls back the whole build to before this run started.
+```
+
+Do not run reviews, tests, lint, or any quality gates inside this skill
+— they're owned by the ship pipeline at the end of the build, so the
+slice loop stays focused on implementation.
 
 ### 10. Mark slice complete and document
 

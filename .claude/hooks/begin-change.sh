@@ -11,7 +11,11 @@
 #
 # Behavior:
 #   - --type defaults to `fix` (ad-hoc / bug-fix workspaces).
-#     Use --type slice when called from /dev-build-application.
+#     Use --type slice when called from /dev-build-application's
+#     per-slice loop. Use --type build for the shared workspace used
+#     across /dev-build-architecture, /dev-build-scaffold, and
+#     /dev-build-application (they all pass the same name and continue
+#     in the same workspace until the analyst ships at the end).
 #   - Slugifies the name (lowercase, [^a-z0-9-] → '-', collapses '--',
 #     strips leading/trailing '-').
 #   - Branch name: <type>/<slug>.
@@ -28,12 +32,12 @@ TYPE="fix"
 if [ "${1:-}" = "--type" ]; then
   TYPE="${2:-}"
   if [ -z "$TYPE" ]; then
-    echo "begin-change: --type requires an argument (slice or fix)" >&2
+    echo "begin-change: --type requires an argument (slice, fix, or build)" >&2
     exit 2
   fi
   case "$TYPE" in
-    slice|fix) ;;
-    *) echo "begin-change: --type must be slice or fix (got: $TYPE)" >&2; exit 2 ;;
+    slice|fix|build) ;;
+    *) echo "begin-change: --type must be slice, fix, or build (got: $TYPE)" >&2; exit 2 ;;
   esac
   shift 2
 fi

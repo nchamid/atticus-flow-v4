@@ -8,6 +8,34 @@ version: '0.1'
 
 Stand up the empty skeleton the slice plan will fill. **No feature logic.** The only behaviour shipped is a health-check that proves the stack wires end-to-end.
 
+## Workspace — shared across the three build skills
+
+This skill continues in the **same** workspace that
+`/dev-build-architecture` already created, branched off `dev` at the
+start of the build flow. This is a deliberate exception to the
+CLAUDE.md "derive a kebab-case name from the user's request" rule for
+the integration-branch guard.
+
+Before any Edit/Write/NotebookEdit in this skill, ask for the shared
+workspace by its fixed name (idempotent — returns the same one
+`/dev-build-architecture` used):
+
+```bash
+WT=$(bash .claude/hooks/begin-change.sh --type build initial-build)
+```
+
+The architecture artifacts written by `/dev-build-architecture` live
+inside `$WT` (not on `dev`). Read them from there, write the scaffold
+on top of them, also inside `$WT`. **Nothing is committed or shipped**
+until the analyst runs `/dev-review-and-remediate` + `/dev-ship` at the
+very end of `/dev-build-application`.
+
+If `$WT` doesn't already contain the seven architecture artifacts under
+`artifacts/docs/dev/architecture/`, **STOP** and tell the analyst to
+run `/dev-build-architecture` first.
+
+Issue every Edit/Write in this skill against paths inside `$WT`.
+
 ## Flags
 
 - `--verbose` — opt-in plumbing view. When present in `$ARGUMENTS`,
@@ -39,8 +67,8 @@ If you find yourself reaching to re-Read any of the above, stop and reuse what's
 
 ### 1. Guard
 
-- If `/artifacts/docs/dev/architecture/` is missing or empty, **STOP** — tell the user to run `/dev-build-architecture`.
-- Verify all seven Step 1 artifacts exist: `data-model.md`, `api-contracts.md`, `module-boundaries.md`, `shared-types.md` (plus its `/shared/types/*.ts`), `dependency-graph.md`, `shared-inventory.md`, `slice-plan.md`. Any missing → **STOP**.
+- The architecture artifacts live in the **shared workspace `$WT`** (from the Workspace section above), not on `dev`. If `$WT/artifacts/docs/dev/architecture/` is missing or empty, **STOP** — tell the analyst to run `/dev-build-architecture` first.
+- Verify all seven Step 1 artifacts exist inside `$WT/artifacts/docs/dev/architecture/`: `data-model.md`, `api-contracts.md`, `module-boundaries.md`, `shared-types.md` (plus its `$WT/shared/types/*.ts`), `dependency-graph.md`, `shared-inventory.md`, `slice-plan.md`. Any missing → **STOP**.
 
 ### 2. Load contracts
 

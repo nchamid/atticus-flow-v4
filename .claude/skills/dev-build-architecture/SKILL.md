@@ -10,6 +10,35 @@ Lock the contracts every later step builds against. **No implementation code.**
 
 `$ARGUMENTS` must be a requirements doc (path, attachment, or pasted). It is the authoritative source — every artifact must trace back to it.
 
+## Workspace — shared across the three build skills
+
+This skill, `/dev-build-scaffold`, and `/dev-build-application` all write
+into the **same** workspace, branched off `dev` at the start of this
+skill. This is a deliberate exception to the CLAUDE.md "derive a
+kebab-case name from the user's request" rule for the integration-branch
+guard.
+
+Before any Edit/Write/NotebookEdit in this skill, ask for the shared
+workspace by its fixed name:
+
+```bash
+WT=$(bash .claude/hooks/begin-change.sh --type build initial-build)
+```
+
+`begin-change.sh` is idempotent on name, so when `/dev-build-scaffold`
+and `/dev-build-application` later run the same command, they continue
+in the same workspace and see this skill's artifacts. **Nothing is
+committed or shipped** until the analyst runs `/dev-review-and-remediate`
++ `/dev-ship` at the very end of `/dev-build-application` — that final
+ship lands the whole build (architecture + scaffold + slices) on `dev`
+as one merge commit.
+
+Issue every Edit/Write in this skill against paths inside `$WT`.
+
+If `begin-change.sh` reports the project is missing `dev` or has
+uncommitted edits on `dev`, **STOP** and report in plain English — that
+is a setup issue the analyst can't fix mid-flow.
+
 ## Flags
 
 - `--verbose` — opt-in plumbing view. When present in `$ARGUMENTS`,
