@@ -156,7 +156,7 @@ If `reviews/code-review-findings/<label>.md` already exists:
 
 Run iterations `1..MAX_ITERATIONS` (default 5). Each iteration is one complete pass of steps 1–6 below. After each iteration, evaluate the **stop conditions**.
 
-Each iteration runs three phases in order: **Phase 0 — unit tests**, **Phase 1 — code review**, **Phase 2 — security review**. Mechanical fixes auto-apply at the end of each phase before the next phase begins (so code review sees the test-fixed source, and security review sees the code-review-fixed source). Architectural findings from all three phases are batched into a **single** developer prompt at the end of the iteration.
+Each iteration runs three phases in order: **Phase 0 — unit tests**, **Phase 1 — code review**, **Phase 2 — security review**. Mechanical fixes auto-apply at the end of each phase before the next phase begins (so code review sees the test-fixed source, and security review sees the code-review-fixed source). **In every phase, when a mechanical fix touches source code, the affected unit tests are re-run before the phase completes** — this prevents source-changing Phase 1 or Phase 2 fixes from reaching `CLEAN` without test verification. Architectural findings from all three phases are batched into a **single** developer prompt at the end of the iteration.
 
 ### Step 1 — Phase 0: Unit-test execution, gap-fill, and remediation
 
@@ -185,6 +185,7 @@ For each file in **`source_scope`** (changed source, test files filtered out):
 - Flag each finding with a **fix class**: `Mechanical` or `Architectural`.
 - Append findings to `reviews/code-review-findings/<label>.md` under heading `## Iteration <N>`. Include file, line, severity, fix class, rule reference, issue, proposed fix.
 - Auto-apply mechanical fixes immediately (so security review sees the post-fix state). Append to `reviews/remediations-applied/<label>.md` with `Phase: 1` annotation.
+- **If the fix touched source code (not just docs, comments, or non-runtime configuration), re-run the unit tests that exercise that source file** — same scoping as Phase 0 (e.g. `dotnet test` for affected projects, `npm test -- --testPathPattern=<files>`, tSQLt on affected schemas). If a test that was passing now fails, append the failure to `reviews/unit-tests/test-failures/<label>.md` under `## Iteration <N>` tagged `Phase: 1-regression` and carry it forward as a new open finding — it will be picked up by Phase 0 of the next iteration (or trigger `Stuck` if the same fix keeps breaking the same test).
 
 ### Step 3 — Phase 2: Security review
 
@@ -193,6 +194,7 @@ For each file in **`source_scope`** (changed source, test files filtered out):
 - Flag each finding with a **fix class**: `Mechanical`, `Architectural`, or `Pending-decision` (for product trade-offs that only the developer can make, e.g. MSAL token cache location).
 - Append to `reviews/security-review-findings/<label>.md` under `## Iteration <N>`.
 - Auto-apply mechanical fixes immediately. Append to `reviews/remediations-applied/<label>.md` with `Phase: 2` annotation.
+- **If the fix touched source code (not just docs, comments, or non-runtime configuration), re-run the unit tests that exercise that source file** — same scoping as Phase 0. Security fixes tightening input handling, parameterization, or auth checks can plausibly change runtime behavior; treat any newly-failing test exactly as in Phase 1 above — append to `reviews/unit-tests/test-failures/<label>.md` tagged `Phase: 2-regression` and carry it forward as a new open finding.
 
 ### Step 4 — Load prior decisions and skip already-resolved findings
 
